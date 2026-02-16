@@ -55,7 +55,7 @@ class ServerConfig:
 @dataclass
 class Config:
     server: ServerConfig
-    models: List[ModelConfig] = field(default_factory=list)
+    models: Dict[str, ModelConfig] = field(default_factory=dict)
     default_model: Optional[str] = None
 
     # --- construction / serialization -------------------------------------
@@ -68,32 +68,42 @@ class Config:
             workers=server_data.get("workers", 1),
         )
 
-        models_raw = data.get("models", [])
-        models: List[ModelConfig] = []
-        # Accept both list-of-models (preferred) and dict-of-models
+        # Support both legacy `models` (list) and the preferred `profiles` mapping
+        models_raw = data.get("models") if data.get("models") is not None else data.get("profiles", [])
+        models: Dict[str, ModelConfig] = {}
+
+        # If profiles is a mapping (dict), keys are profile names
         if isinstance(models_raw, dict):
             for name, m in models_raw.items():
-                models.append(
-                    ModelConfig(
-                        name=name,
-                        model_type=m.get("model_type") or m.get("provider") or m.get("type"),
-                        endpoint=m.get("endpoint") or m.get("base_url"),
-                        api_key=m.get("api_key"),
-                        temperature=m.get("temperature", 0.7),
-                        max_tokens=m.get("max_tokens", 2048),
-                    )
+                # derive endpoint: prefer explicit endpoint/base_url, else use localhost:port if provided
+                endpoint = (
+                    m.get("endpoint")
+                    or m.get("base_url")
+                    or (f"http://localhost:{m.get('port')}" if m.get("port") else None)
+                    or m.get("model_path")
+                )
+                models[name] = ModelConfig(
+                    name=name,
+                    model_type=(m.get("model_type") or m.get("provider") or m.get("type") or "local"),
+                    endpoint=endpoint or "",
+                    api_key=m.get("api_key"),
+                    temperature=m.get("temperature", 0.7),
+                    max_tokens=m.get("max_tokens", 2048),
                 )
         else:
+            # assume a list of model entries
             for m in models_raw:
-                models.append(
-                    ModelConfig(
-                        name=m["name"],
-                        model_type=m.get("model_type") or m.get("provider") or m.get("type"),
-                        endpoint=m.get("endpoint") or m.get("base_url"),
-                        api_key=m.get("api_key"),
-                        temperature=m.get("temperature", 0.7),
-                        max_tokens=m.get("max_tokens", 2048),
-                    )
+                name = m.get("name")
+                endpoint = (
+                    m.get("endpoint") or m.get("base_url") or (f"http://localhost:{m.get('port')}" if m.get("port") else None) or m.get("model_path")
+                )
+                models[name] = ModelConfig(
+                    name=name,
+                    model_type=(m.get("model_type") or m.get("provider") or m.get("type") or "local"),
+                    endpoint=endpoint or "",
+                    api_key=m.get("api_key"),
+                    temperature=m.get("temperature", 0.7),
+                    max_tokens=m.get("max_tokens", 2048),
                 )
 
         cfg = cls(server=server, models=models, default_model=data.get("default_model"))
@@ -109,16 +119,14 @@ class Config:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "server": self.server.to_dict(),
-            "models": [m.to_dict() for m in self.models],
+            # keep external representation as a list for compatibility
+            "models": [m.to_dict() for m in self.models.values()],
             "default_model": self.default_model,
         }
 
     # --- helpers ---------------------------------------------------------
     def get_model(self, name: str) -> Optional[ModelConfig]:
-        for m in self.models:
-            if m.name == name:
-                return m
-        return None
+        return self.models.get(name)
 
 
 # --- OS-specific config path & default creation ---------------------------
