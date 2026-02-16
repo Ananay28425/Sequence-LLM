@@ -67,7 +67,7 @@ class TestConfig:
         assert config.server.host == "0.0.0.0"
         assert config.server.port == 9000
         assert len(config.models) == 1
-        assert config.models[0].name == "llama2"
+        assert config.get_model("llama2").name == "llama2"
 
     def test_config_from_yaml(self):
         """Test loading Config from YAML file"""
@@ -98,8 +98,8 @@ models:
             assert config.server.port == 8000
             assert config.server.workers == 4
             assert len(config.models) == 2
-            assert config.models[0].name == "ollama-model"
-            assert config.models[1].name == "openai-model"
+            assert config.get_model("ollama-model").name == "ollama-model"
+            assert config.get_model("openai-model").name == "openai-model"
         finally:
             os.unlink(tmp_path)
 
@@ -107,12 +107,10 @@ models:
         """Test getting a model by name"""
         config = Config(
             server=ServerConfig(),
-            models=[
-                ModelConfig(name="model1", model_type="ollama", endpoint="http://localhost:11434"),
-                ModelConfig(
-                    name="model2", model_type="openai", endpoint="https://api.openai.com/v1"
-                ),
-            ],
+            models={
+                "model1": ModelConfig(name="model1", model_type="ollama", endpoint="http://localhost:11434"),
+                "model2": ModelConfig(name="model2", model_type="openai", endpoint="https://api.openai.com/v1"),
+            },
         )
 
         model = config.get_model("model1")
@@ -126,9 +124,7 @@ models:
         """Test converting Config to dictionary"""
         config = Config(
             server=ServerConfig(host="0.0.0.0", port=9000),
-            models=[
-                ModelConfig(name="test", model_type="ollama", endpoint="http://localhost:11434")
-            ],
+            models={"test": ModelConfig(name="test", model_type="ollama", endpoint="http://localhost:11434")},
         )
 
         config_dict = config.to_dict()
