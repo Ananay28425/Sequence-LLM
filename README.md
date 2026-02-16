@@ -51,6 +51,7 @@ pip install sequence-llm
 Run the CLI:
 
 ```bash
+pip install sequence-llm
 seq-llm
 ```
 
@@ -146,8 +147,12 @@ GitHub: https://github.com/Ananay28425/Sequence-LLM
 
 ## Support
 
+<<<<<<< HEAD
 Report bugs or request features:
 https://github.com/Ananay28425/Sequence-LLM/issues
+=======
+For issues, questions, or suggestions, please open an issue on [GitHub](https://github.com/yourusername/Sequence-LLM/issues).
+>>>>>>> 426b34d9281792b249bd5abaae366190add98751
 
 ---
 
