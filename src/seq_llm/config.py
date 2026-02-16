@@ -23,6 +23,11 @@ class ModelConfig:
     api_key: Optional[str] = None
     max_tokens: int = 2048
     temperature: float = 0.7
+    port: int = 8000
+    ctx_size: int = 2048
+    threads: int = 6
+    ngl: int = 0
+    top_p: float = 0.95
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -57,6 +62,8 @@ class Config:
     server: ServerConfig
     models: Dict[str, ModelConfig] = field(default_factory=dict)
     default_model: Optional[str] = None
+    llama_server: str = ""
+    defaults: Dict[str, Any] = field(default_factory=dict)
 
     # --- construction / serialization -------------------------------------
     @classmethod
@@ -71,16 +78,17 @@ class Config:
         # Support both legacy `models` (list) and the preferred `profiles` mapping
         models_raw = data.get("models") if data.get("models") is not None else data.get("profiles", [])
         models: Dict[str, ModelConfig] = {}
+        defaults = data.get("defaults", {})
 
         # If profiles is a mapping (dict), keys are profile names
         if isinstance(models_raw, dict):
             for name, m in models_raw.items():
-                # derive endpoint: prefer explicit endpoint/base_url, else use localhost:port if provided
+                # derive endpoint: prefer explicit endpoint/base_url/model_path, else use localhost:port
                 endpoint = (
                     m.get("endpoint")
                     or m.get("base_url")
-                    or (f"http://localhost:{m.get('port')}" if m.get("port") else None)
                     or m.get("model_path")
+                    or (f"http://localhost:{m.get('port')}" if m.get("port") else None)
                 )
                 models[name] = ModelConfig(
                     name=name,
@@ -89,13 +97,22 @@ class Config:
                     api_key=m.get("api_key"),
                     temperature=m.get("temperature", 0.7),
                     max_tokens=m.get("max_tokens", 2048),
+                    port=m.get("port", defaults.get("port", 8000)),
+                    ctx_size=m.get("ctx_size", defaults.get("ctx_size", 2048)),
+                    threads=m.get("threads", defaults.get("threads", 6)),
+                    ngl=m.get("ngl", defaults.get("ngl", 0)),
+                    top_p=m.get("top_p", defaults.get("top_p", 0.95)),
                 )
         else:
             # assume a list of model entries
             for m in models_raw:
                 name = m.get("name")
+                # derive endpoint: prefer explicit endpoint/base_url/model_path, else use localhost:port
                 endpoint = (
-                    m.get("endpoint") or m.get("base_url") or (f"http://localhost:{m.get('port')}" if m.get("port") else None) or m.get("model_path")
+                    m.get("endpoint") 
+                    or m.get("base_url") 
+                    or m.get("model_path")
+                    or (f"http://localhost:{m.get('port')}" if m.get("port") else None)
                 )
                 models[name] = ModelConfig(
                     name=name,
@@ -104,9 +121,20 @@ class Config:
                     api_key=m.get("api_key"),
                     temperature=m.get("temperature", 0.7),
                     max_tokens=m.get("max_tokens", 2048),
+                    port=m.get("port", defaults.get("port", 8000)),
+                    ctx_size=m.get("ctx_size", defaults.get("ctx_size", 2048)),
+                    threads=m.get("threads", defaults.get("threads", 6)),
+                    ngl=m.get("ngl", defaults.get("ngl", 0)),
+                    top_p=m.get("top_p", defaults.get("top_p", 0.95)),
                 )
 
-        cfg = cls(server=server, models=models, default_model=data.get("default_model"))
+        cfg = cls(
+            server=server,
+            models=models,
+            default_model=data.get("default_model"),
+            llama_server=data.get("llama_server", ""),
+            defaults=defaults,
+        )
         return cfg
 
     @classmethod
@@ -142,28 +170,40 @@ def get_default_config_path() -> Path:
     return home / ".config" / "sequence-llm" / "config.yaml"
 
 
-DEFAULT_CONFIG_YAML = """llama_server: "<path to llama-server>"
-defaults:
-  threads: 6
-  threads_batch: 8
-  batch_size: 512
+DEFAULT_CONFIG_YAML = """# Sequence-LLM configuration for llama.cpp
+# Path to llama-server executable
+llama_server: "E:\\\\LLama\\\\llama-server.exe"
 
+# Default parameters applied to all profiles (can be overridden per-profile)
+defaults:
+  threads: 6            # CPU threads to use for inference
+  threads_batch: 8      # Threads for batched inference
+  batch_size: 512       # Max batch size for processing
+
+# Model profiles - sequential execution (stop one before starting another)
 profiles:
   brain:
     name: "Brain (GLM-4.7-Flash)"
-    model_path: "<path>"
-    system_prompt: "<path>"
+    model_path: "E:\\\\LLama\\\\models\\\\GLM-4.7-Flash-Abliterated-i1\\\\Huihui-GLM-4.7-Flash-abliterated.i1-IQ3_XS.gguf"
     port: 8081
     ctx_size: 16384
+    threads: 6
+    ngl: 0              # Number of GPU layers (0 = CPU only)
     temperature: 0.7
+    top_p: 0.95
 
   coder:
     name: "Coder (Qwen2.5-Coder-7B)"
-    model_path: "<path>"
-    system_prompt: "<path>"
+    model_path: "E:\\\\LLama\\\\models\\\\Qwen2.5-Coder-7B-Instruct-abliterated\\\\Qwen2.5-Coder-7B-Instruct-abliterated.Q4_K_M.gguf"
     port: 8082
     ctx_size: 32768
+    threads: 6
+    ngl: 0
     temperature: 0.3
+    top_p: 0.95
+
+# Default profile to auto-start on CLI launch
+default_model: brain
 """
 
 

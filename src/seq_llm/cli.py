@@ -17,6 +17,7 @@ from rich.live import Live
 from seq_llm.config import Config, ensure_default_config, get_default_config_path
 from seq_llm.core.server_manager import ServerManager
 from seq_llm.core.api_client import APIClient
+from seq_llm.core.command_builder import build_llama_server_command
 
 console = Console()
 app = typer.Typer(help="Sequence-LLM: CLI for managing local LLMs (llama-server)")
@@ -59,6 +60,11 @@ class CLIState:
             console.print(f"[red]Error: profile '{profile_name}' not found")
             return False
 
+        # Validate llama_server path is configured
+        if not self.config.llama_server:
+            console.print("[red]Error: llama_server path not configured")
+            return False
+
         # Stop existing server if running
         if self.manager:
             with Live(Spinner("spin", text="Stopping server..."), console=console):
@@ -66,19 +72,18 @@ class CLIState:
             self.manager = None
             self.active_profile = None
 
-        # Start new profile
-        # Mock command building from profile (in real implementation, read from config)
-        # For now, use a placeholder command that tests expect
-        cmd = [
-            "python",
-            "-m",
-            "llama_cpp.server",
-            "-m",
-            profile.endpoint,
-            f"--port={profile.model_type}",  # Using model_type as placeholder for port
-        ]
+        # Build command from profile config
+        try:
+            cmd = build_llama_server_command(
+                self.config.llama_server,
+                profile,
+                self.config.defaults,
+            )
+        except Exception as e:
+            console.print(f"[red]Error building command: {e}")
+            return False
 
-        self.manager = ServerManager(server_command=cmd, port=8000, timeout=30)
+        self.manager = ServerManager(server_command=cmd, port=profile.port, timeout=30)
 
         with Live(
             Spinner("spin", text=f"Starting {profile.name}..."), console=console
