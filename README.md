@@ -1,65 +1,71 @@
 # Sequence-LLM
 
-A terminal-first CLI for managing local LLMs running via `llama-server`. Ensures **STRICT SEQUENTIAL LOADING** — only one model at a time. Cross-platform (Windows/Linux/macOS).
+Sequence-LLM is a terminal-first CLI for running local LLMs through `llama-server` (llama.cpp) with profile-based model switching and automatic server lifecycle management.
 
-## Overview
+It is designed for developers who run multiple local models and want a simple, reproducible workflow without writing shell scripts.
 
-Sequence-LLM provides:
+Cross-platform: Windows, Linux, macOS.
 
-- **Interactive CLI** (Typer + Rich): commands to switch between profiles, chat, and view status
-- **Single-process management**: Only one `llama-server` running at a time; new profile switch stops the old one
-- **Profile-based config**: Organize models into named profiles (e.g., `brain`, `coder`)
-- **Auto-start on launch**: Attempts to start the default profile (`brain`) on CLI boot
-- **Health polling**: Waits for server readiness via `/health` endpoint (1s intervals, 30s timeout)
-- **Cross-platform**: Works on Windows, Linux, and macOS using `subprocess` + `psutil`
+## Why Sequence-LLM
+
+Running local models often involves:
+
+- Manually starting and stopping servers
+- Remembering model paths and ports
+- Managing multiple configurations
+- Writing ad-hoc scripts to switch models
+
+Sequence-LLM solves this by providing:
+
+- Named model profiles
+- Automatic start and shutdown of servers
+- Interactive chat interface
+- Consistent configuration across machines
 
 ## Features
 
-- 🧠 **Profile switching**: `/brain`, `/coder`, etc. — seamless model swaps
-- 💬 **Interactive chat loop**: Send messages (just type, no prefix), get prefixed replies
-- 🔄 **Graceful shutdown**: SIGTERM → SIGKILL on profile switch or `/quit`
-- ⚙️ **OS-aware config paths**: Auto-creates config in the right place per OS
-- 🛡️ **Safe port handling**: Kills only matching `llama-server` processes when port is in use
-- 📊 **Status panel**: `/status` displays active model, port, PID, uptime (Rich Panel)
+- Interactive CLI built with Typer and Rich
+- Profile-based model switching (`/brain`, `/coder`, etc.)
+- Automatic shutdown of previous server before starting a new one
+- Health checking with readiness polling
+- Cross-platform process management using subprocess and psutil
+- OS-aware configuration directory creation
+- Conversation history management
+- Status panel showing active model and server info
 
 ## Installation
 
 ### Requirements
 
 - Python 3.9+
-- `llama-server` binary in PATH or configured in `config.yaml`
+- `llama-server` binary from llama.cpp
 
-### From source
+Install from PyPI:
 
 ```bash
-git clone https://github.com/Ananay28425/Sequence-LLM.git
-cd Sequence-LLM
-pip install -e .
+pip install sequence-llm
 ```
-
-This installs the `seq-llm` command.
 
 ## Quick Start
 
-### 1. Launch the CLI
+Run the CLI:
 
 ```bash
 seq-llm
 ```
 
-On first run, a default config is created at:
-- **Windows**: `%APPDATA%\sequence-llm\config.yaml`
-- **Linux**: `~/.config/sequence-llm/config.yaml`
-- **macOS**: `~/Library/Application Support/sequence-llm/config.yaml`
+On first launch, a configuration file is created automatically.
 
-The CLI auto-attempts to start the `brain` profile. If it fails, you'll see a warning.
+Config locations:
 
-### 2. Edit the config file
+- Windows: `%APPDATA%\sequence-llm\config.yaml`
+- Linux: `~/.config/sequence-llm/config.yaml`
+- macOS: `~/Library/Application Support/sequence-llm/config.yaml`
 
-Update the paths to your `llama-server` binary and model files:
+## Configuration Example
 
 ```yaml
-llama_server: "/opt/llama-server/llama-server"
+llama_server: "/path/to/llama-server"
 
 defaults:
   threads: 6
@@ -68,7 +74,7 @@ defaults:
 
 profiles:
   brain:
-    name: "Brain (GLM-4.7-Flash)"
+    name: "Brain Model"
     model_path: "/path/to/model.gguf"
     system_prompt: "/path/to/system.txt"
     port: 8081
@@ -76,170 +82,76 @@ profiles:
     temperature: 0.7
 
   coder:
-    name: "Coder (Qwen2.5-Coder-7B)"
+    name: "Coder Model"
     model_path: "/path/to/coder.gguf"
-    system_prompt: "/path/to/coder_system.txt"
+    system_prompt: "/path/to/coder.txt"
     port: 8082
     ctx_size: 32768
     temperature: 0.3
 ```
 
-### 3. Use the CLI
+## CLI Usage
 
 ```
-You> /status
-  → Shows active model, port, health status
-
-You> /brain
-  → Switches to brain profile (stops current server, starts brain)
-
-You> /coder
-  → Switches to coder profile
-
-You> Hello, how are you?
-  → Sends message to active model (prefixed reply: "Brain> ...")
-
-You> /clear
-  → Clears conversation history (does NOT stop server)
-
-You> /quit
-  → Stops server and exits CLI
+/status   → show active model and server status
+/brain    → switch to brain profile
+/coder    → switch to coder profile
+/clear    → clear conversation history
+/quit     → stop server and exit
 ```
 
-## Configuration
+Typing any text sends a message to the active model.
 
-See [docs/installation.md](docs/installation.md) and [docs/usage.md](docs/usage.md) for detailed guides.
+## Example Workflow
 
-### Config Schema
+1. Start CLI
+2. Automatically load default model
+3. Switch between models using commands
+4. Chat interactively without restarting processes manually
 
-```yaml
-llama_server: "<path to llama-server binary>"
+## Architecture
 
-defaults:             # Default args passed to all llama-server invocations
-  threads: 6
-  threads_batch: 8
-  batch_size: 512
+Core components:
 
-profiles:             # Named model profiles
-  <profile_name>:
-    name: "<human-readable name>"
-    model_path: "<path to .gguf or model file>"
-    system_prompt: "<path to system prompt file>"
-    port: <port number>
-    ctx_size: <context size>
-    temperature: <float 0.0-2.0>
-```
+- CLI: interactive interface and command routing
+- Server Manager: lifecycle control of llama-server
+- API Client: communication with local inference server
+- Config System: YAML-based profiles and defaults
 
-### Full Config Example
+## Development
 
-See [tests/fixtures/sample_config.yaml](tests/fixtures/sample_config.yaml).
-
-## Project Structure
-
-```
-sequence-llm/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── docs/
-│   ├── index.md
-│   ├── installation.md
-│   └── usage.md
-├── examples/
-│   └── basic_workflow.md
-├── src/seq_llm/
-│   ├── __init__.py
-│   ├── cli.py                 # Interactive CLI (Typer + Rich)
-│   ├── config.py              # Config loading/validation (dataclasses + YAML)
-│   └── core/
-│       ├── __init__.py
-│       ├── server_manager.py  # llama-server lifecycle (subprocess + psutil)
-│       └── api_client.py      # Chat completions API (httpx streaming)
-├── tests/
-│   ├── fixtures/
-│   │   └── sample_config.yaml
-│   └── unit/
-│       ├── test_config.py
-│       └── test_server_manager.py
-├── .gitignore
-├── LICENSE
-├── pyproject.toml
-├── README.md
-└── requirements.txt
-```
-
-## Tech Stack
-
-- **CLI**: Typer + Rich (interactive, styled terminal UI)
-- **Config**: `dataclasses` + `pyyaml` (simple, no Pydantic)
-- **Process management**: `subprocess` + `psutil` (cross-platform)
-- **HTTP client**: `httpx` (sync mode, streaming support)
-- **Tests**: `pytest` (unit tests with mocks)
-
-## Testing
+Clone repository:
 
 ```bash
-pip install -e ".[dev]"
-pytest tests/ -v
+git clone https://github.com/Ananay28425/Sequence-LLM.git
+cd Sequence-LLM
+pip install -e .
 ```
 
-## Documentation
+Run tests:
 
-- [Installation Guide](docs/installation.md)
-- [Usage Guide](docs/usage.md)
-- [API Reference](docs/index.md)
-- [Example Workflow](examples/basic_workflow.md)
+```bash
+pytest -v
+```
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
-
+MIT License. See LICENSE file for details.
 
 ## Contributing
 
-Contributions are welcome! Please:
+Pull requests and issues are welcome.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
-## Troubleshooting
-
-### Server won't start
-
-- Check if port is already in use: `lsof -i :11434` (macOS/Linux)
-- Ensure Ollama/LM Studio is installed
-- Check server type configuration matches installed software
-
-### API connection errors
-
-- Verify server is running: `curl http://localhost:11434/api/status`
-- Check host and port in configuration
-- Ensure model is available on the server
-
-### Model not found
-
-- List available models: `ollama list` (for Ollama)
-- Pull model before running: `ollama pull llama2`
-- Update configuration with correct model name
+GitHub: https://github.com/Ananay28425/Sequence-LLM
 
 ## Support
 
-For issues, questions, or suggestions, please open an issue on [GitHub](https://github.com/yourusername/Sequence-LLM/issues).
+Report bugs or request features:
+https://github.com/Ananay28425/Sequence-LLM/issues
 
-## Roadmap
+---
 
-- [ ] Support for model chaining and complex workflows
-- [ ] Web UI for workflow visualization
-- [ ] Integration with more LLM providers
-- [ ] Performance optimization and caching
-- [ ] Advanced error handling and retries
+Sequence-LLM provides a lightweight and predictable way to manage local LLM workflows from the terminal.
 
 ---
 
