@@ -145,15 +145,6 @@ Pull requests and issues are welcome.
 
 GitHub: https://github.com/Ananay28425/Sequence-LLM
 
-## Support
-
-<<<<<<< HEAD
-Report bugs or request features:
-https://github.com/Ananay28425/Sequence-LLM/issues
-=======
-For issues, questions, or suggestions, please open an issue on [GitHub](https://github.com/yourusername/Sequence-LLM/issues).
->>>>>>> 426b34d9281792b249bd5abaae366190add98751
-
 ---
 
 Sequence-LLM provides a lightweight and predictable way to manage local LLM workflows from the terminal.
