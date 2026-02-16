@@ -1,216 +1,168 @@
 """Configuration management for Sequence-LLM.
 
-This module handles all configuration loading, validation, and model management.
+Implements dataclasses and loader utilities used by unit tests and the CLI.
 """
 
-import logging
+from __future__ import annotations
+
 import os
-from dataclasses import dataclass, field
+import platform
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
 
-logger = logging.getLogger(__name__)
 
-
+# --- dataclasses -----------------------------------------------------------
 @dataclass
 class ModelConfig:
-    """Configuration for a single LLM model."""
-
     name: str
     model_type: str
-    base_url: str
-    api_key: str
+    endpoint: str
+    api_key: Optional[str] = None
     max_tokens: int = 2048
     temperature: float = 0.7
-    timeout: int = 30
-    extra_params: Dict[str, Any] = field(default_factory=dict)
 
-    def validate(self) -> bool:
-        """Validate model configuration."""
-        if not self.name or not self.model_type:
-            logger.error("Model name and type are required")
-            return False
-        if not self.base_url:
-            logger.error(f"Model {self.name} missing base_url")
-            return False
-        if not self.api_key:
-            logger.error(f"Model {self.name} missing api_key")
-            return False
-        return True
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("Model name must not be empty")
+        if not self.model_type:
+            raise ValueError("Model type must not be empty")
+        if not self.endpoint:
+            raise ValueError("Model endpoint must not be empty")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
 class ServerConfig:
-    """Configuration for server settings."""
-
-    host: str = "localhost"
+    host: str = "127.0.0.1"
     port: int = 8000
-    debug: bool = False
-    log_level: str = "INFO"
+    workers: int = 1
 
-    def validate(self) -> bool:
-        """Validate server configuration."""
-        if not 0 < self.port < 65536:
-            logger.error(f"Invalid port: {self.port}")
-            return False
-        return True
+    def __post_init__(self) -> None:
+        if not (1 <= int(self.port) <= 65535):
+            raise ValueError("port must be in range 1..65535")
+        if int(self.workers) <= 0:
+            raise ValueError("workers must be > 0")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
 class Config:
-    """Main configuration object."""
-
     server: ServerConfig
-    models: Dict[str, ModelConfig]
+    models: List[ModelConfig] = field(default_factory=list)
     default_model: Optional[str] = None
 
-    def validate(self) -> bool:
-        """Validate entire configuration."""
-        if not self.server.validate():
-            return False
-
-        if not self.models:
-            logger.error("At least one model must be configured")
-            return False
-
-        for model in self.models.values():
-            if not model.validate():
-                return False
-
-        if self.default_model and self.default_model not in self.models:
-            logger.error(f"Default model {self.default_model} not found in models")
-            return False
-
-        return True
-
-    def get_model(self, name: Optional[str] = None) -> Optional[ModelConfig]:
-        """Get model configuration by name or return default."""
-        model_name = name or self.default_model
-        if not model_name:
-            if self.models:
-                return next(iter(self.models.values()))
-            return None
-        return self.models.get(model_name)
-
-
-class ConfigLoader:
-    """Loads and manages configuration from various sources."""
-
-    def __init__(self, config_path: Optional[str] = None):
-        """Initialize config loader.
-
-        Args:
-            config_path: Path to configuration file. If None, uses default locations.
-        """
-        self.config_path = config_path or self._find_config_file()
-
-    @staticmethod
-    def _find_config_file() -> str:
-        """Find configuration file in default locations."""
-        default_locations = [
-            "config.yaml",
-            "config.yml",
-            os.path.expanduser("~/.seq_llm/config.yaml"),
-            "/etc/seq_llm/config.yaml",
-        ]
-
-        for location in default_locations:
-            path = Path(location)
-            if path.exists():
-                logger.info(f"Found config file at {location}")
-                return str(path)
-
-        raise FileNotFoundError(
-            f"Configuration file not found in default locations: {default_locations}"
-        )
-
-    def load(self) -> Config:
-        """Load configuration from file.
-
-        Returns:
-            Config object
-
-        Raises:
-            FileNotFoundError: If config file not found
-            ValueError: If config is invalid
-        """
-        path = Path(self.config_path)
-
-        if not path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
-
-        with open(path, 'r') as f:
-            data = yaml.safe_load(f)
-
-        if not data:
-            raise ValueError("Configuration file is empty")
-
-        return self._parse_config(data)
-
-    def _parse_config(self, data: Dict[str, Any]) -> Config:
-        """Parse raw configuration data into Config object.
-
-        Args:
-            data: Raw configuration dictionary
-
-        Returns:
-            Config object
-
-        Raises:
-            ValueError: If configuration is invalid
-        """
-        # Parse server config
-        server_data = data.get('server', {})
+    # --- construction / serialization -------------------------------------
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Config":
+        server_data = data.get("server", {})
         server = ServerConfig(
-            host=server_data.get('host', 'localhost'),
-            port=server_data.get('port', 8000),
-            debug=server_data.get('debug', False),
-            log_level=server_data.get('log_level', 'INFO'),
+            host=server_data.get("host", "127.0.0.1"),
+            port=server_data.get("port", 8000),
+            workers=server_data.get("workers", 1),
         )
 
-        # Parse models
-        models_data = data.get('models', {})
-        if not models_data:
-            raise ValueError("No models configured")
+        models_raw = data.get("models", [])
+        models: List[ModelConfig] = []
+        # Accept both list-of-models (preferred) and dict-of-models
+        if isinstance(models_raw, dict):
+            for name, m in models_raw.items():
+                models.append(
+                    ModelConfig(
+                        name=name,
+                        model_type=m.get("model_type") or m.get("provider") or m.get("type"),
+                        endpoint=m.get("endpoint") or m.get("base_url"),
+                        api_key=m.get("api_key"),
+                        temperature=m.get("temperature", 0.7),
+                        max_tokens=m.get("max_tokens", 2048),
+                    )
+                )
+        else:
+            for m in models_raw:
+                models.append(
+                    ModelConfig(
+                        name=m["name"],
+                        model_type=m.get("model_type") or m.get("provider") or m.get("type"),
+                        endpoint=m.get("endpoint") or m.get("base_url"),
+                        api_key=m.get("api_key"),
+                        temperature=m.get("temperature", 0.7),
+                        max_tokens=m.get("max_tokens", 2048),
+                    )
+                )
 
-        models = {}
-        for model_name, model_data in models_data.items():
-            model = ModelConfig(
-                name=model_name,
-                model_type=model_data.get('type', 'openai'),
-                base_url=model_data.get('base_url', ''),
-                api_key=model_data.get('api_key', '') or os.getenv('OPENAI_API_KEY', ''),
-                max_tokens=model_data.get('max_tokens', 2048),
-                temperature=model_data.get('temperature', 0.7),
-                timeout=model_data.get('timeout', 30),
-                extra_params=model_data.get('extra_params', {}),
-            )
-            models[model_name] = model
+        cfg = cls(server=server, models=models, default_model=data.get("default_model"))
+        return cfg
 
-        # Create config
-        config = Config(
-            server=server,
-            models=models,
-            default_model=data.get('default_model'),
-        )
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "Config":
+        p = Path(path)
+        with p.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+        return cls.from_dict(raw)
 
-        # Validate
-        if not config.validate():
-            raise ValueError("Configuration validation failed")
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "server": self.server.to_dict(),
+            "models": [m.to_dict() for m in self.models],
+            "default_model": self.default_model,
+        }
 
-        return config
+    # --- helpers ---------------------------------------------------------
+    def get_model(self, name: str) -> Optional[ModelConfig]:
+        for m in self.models:
+            if m.name == name:
+                return m
+        return None
 
-    @staticmethod
-    def load_from_dict(data: Dict[str, Any]) -> Config:
-        """Load configuration from dictionary (useful for testing).
 
-        Args:
-            data: Configuration dictionary
+# --- OS-specific config path & default creation ---------------------------
+def get_default_config_path() -> Path:
+    home = Path.home()
+    system = platform.system()
+    if system == "Windows":
+        appdata = os.getenv("APPDATA", home)
+        return Path(appdata) / "sequence-llm" / "config.yaml"
+    if system == "Darwin":
+        return home / "Library" / "Application Support" / "sequence-llm" / "config.yaml"
+    # Linux / other
+    return home / ".config" / "sequence-llm" / "config.yaml"
 
-        Returns:
-            Config object
-        """
-        loader = ConfigLoader.__new__(ConfigLoader)
-        return loader._parse_config(data)
+
+DEFAULT_CONFIG_YAML = """llama_server: "<path to llama-server>"
+defaults:
+  threads: 6
+  threads_batch: 8
+  batch_size: 512
+
+profiles:
+  brain:
+    name: "Brain (GLM-4.7-Flash)"
+    model_path: "<path>"
+    system_prompt: "<path>"
+    port: 8081
+    ctx_size: 16384
+    temperature: 0.7
+
+  coder:
+    name: "Coder (Qwen2.5-Coder-7B)"
+    model_path: "<path>"
+    system_prompt: "<path>"
+    port: 8082
+    ctx_size: 32768
+    temperature: 0.3
+"""
+
+
+def ensure_default_config(path: Path | None = None) -> Path:
+    path = Path(path or get_default_config_path())
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
+    return path
+
