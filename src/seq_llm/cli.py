@@ -29,6 +29,7 @@ class CLIState:
 
     def __init__(self):
         self.config: Config | None = None
+        self.config_path: Optional[Path] = None
         self.manager: ServerManager | None = None
         self.active_profile: str | None = None
         self.conversation: List[dict] = []  # Chat history
@@ -44,6 +45,7 @@ class CLIState:
                     console.print(f"[red]Error: config file not found: {config_path}")
                     return False
             self.config = Config.from_yaml(config_path)
+            self.config_path = config_path
             return True
         except Exception as e:
             console.print(f"[red]Error loading config: {e}")
@@ -63,6 +65,22 @@ class CLIState:
         # Validate llama_server path is configured
         if not self.config.llama_server:
             console.print("[red]Error: llama_server path not configured")
+            return False
+
+        # Validate llama_server executable exists
+        if not Path(self.config.llama_server).exists():
+            console.print(
+                f"[red]Error: llama_server not found at {self.config.llama_server}\n"
+                f"[yellow]Please update config at {self.config_path} with correct path"
+            )
+            return False
+
+        # Validate model file exists
+        if not Path(profile.endpoint).exists():
+            console.print(
+                f"[red]Error: model file not found at {profile.endpoint}\n"
+                f"[yellow]Please verify model_path in config"
+            )
             return False
 
         # Stop existing server if running
@@ -85,14 +103,29 @@ class CLIState:
 
         self.manager = ServerManager(server_command=cmd, port=profile.port, timeout=30)
 
-        with Live(
-            Spinner("dots", text=f"Starting {profile.name}..."), console=console
-        ):
+        # Start the server and wait for readiness
+        # First startup can take longer as model needs to load
+        console.print(f"[cyan]Starting {profile.name}...")
+        console.print(f"[dim]Loading model from {profile.endpoint}")
+        try:
             self.manager.start()
-            ready = self.manager.wait_for_ready(timeout=30)
+        except FileNotFoundError as e:
+            console.print(f"[red]Error: {e}")
+            return False
+
+        # Extended timeout for first startup (model loading can take time)
+        startup_timeout = 120 if not self.active_profile else 60
+        console.print(f"[dim]Waiting for server ready (timeout: {startup_timeout}s)...")
+        ready = self.manager.wait_for_ready(timeout=startup_timeout)
 
         if not ready:
-            console.print(f"[red]Error: {profile.name} failed to start (health check timeout)")
+            console.print(
+                f"[red]Error: {profile.name} failed to start within {startup_timeout}s\n"
+                f"[yellow]Make sure:\n"
+                f"  1. Model file exists: {profile.endpoint}\n"
+                f"  2. Port {profile.port} is not in use\n"
+                f"  3. System has enough RAM/resources"
+            )
             self.manager.stop()
             self.manager = None
             return False
