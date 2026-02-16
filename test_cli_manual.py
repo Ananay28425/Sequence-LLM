@@ -7,7 +7,7 @@ config_path = ensure_default_config()
 print(f"Config created at: {config_path}")
 
 config = Config.from_yaml(config_path)
-print(f"Profiles found: {[m.name for m in config.models]}")
+print(f"Profiles found: {[m.name for m in config.models.values()]}")
 
 # Test profile access
 brain = config.get_model("brain")
