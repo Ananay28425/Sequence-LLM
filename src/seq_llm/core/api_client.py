@@ -33,22 +33,7 @@ class APIClient:
         max_tokens: Optional[int] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """
-        Send a chat completion request to the server.
-
-        Args:
-            model: The model identifier to use
-            messages: List of message dicts with 'role' and 'content' keys
-            temperature: Sampling temperature (0.0 to 2.0)
-            max_tokens: Maximum tokens to generate
-            **kwargs: Additional parameters to pass to the API
-
-        Returns:
-            The API response as a dictionary
-
-        Raises:
-            httpx.HTTPError: If the request fails
-        """
+        """Send a non-streaming chat completion request and return JSON."""
         payload = {
             "model": model,
             "messages": messages,
@@ -60,31 +45,29 @@ class APIClient:
 
         payload.update(kwargs)
 
-        response = self.client.post("/chat/completions", json=payload)
+        response = self.client.post("/v1/chat/completions", json=payload)
         response.raise_for_status()
         return response.json()
 
+    def stream_chat(self, messages: List[Dict[str, str]], model: str = "local"):
+        """POST /v1/chat/completions with stream=true and yield text chunks.
+
+        Yields each text chunk emitted by the server (caller responsible for
+        assembling tokens into final text).
+        """
+        payload = {"model": model, "messages": messages, "stream": True}
+        with self.client.stream("POST", "/v1/chat/completions", json=payload, timeout=None) as resp:
+            resp.raise_for_status()
+            for chunk in resp.iter_text():
+                # httpx yields text chunks as they arrive; forward them to caller
+                yield chunk
+
     def list_models(self) -> Dict[str, Any]:
-        """
-        List available models on the server.
-
-        Returns:
-            The API response containing available models
-
-        Raises:
-            httpx.HTTPError: If the request fails
-        """
         response = self.client.get("/models")
         response.raise_for_status()
         return response.json()
 
     def health_check(self) -> bool:
-        """
-        Check if the server is healthy and accessible.
-
-        Returns:
-            True if the server is accessible, False otherwise
-        """
         try:
             response = self.client.get("/health")
             return response.status_code == 200
@@ -92,13 +75,10 @@ class APIClient:
             return False
 
     def close(self) -> None:
-        """Close the HTTP client connection."""
         self.client.close()
 
     def __enter__(self):
-        """Context manager entry."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
         self.close()
