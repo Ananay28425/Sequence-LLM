@@ -43,12 +43,12 @@ class ServerManager:
         # Ensure PORT is set for servers that read it from env
         env.setdefault("PORT", str(self.port))
 
-        logger.debug("Popen: %s", self.server_command)
+        logger.debug("Starting: %s", " ".join(str(c) for c in self.server_command))
         self.process = subprocess.Popen(
             self.server_command,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=None,  # Show output directly to terminal
+            stderr=None,  # Show errors directly to terminal
         )
 
     def stop(self, force: bool = False) -> None:
