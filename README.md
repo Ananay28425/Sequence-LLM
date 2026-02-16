@@ -1,153 +1,199 @@
 # Sequence-LLM
 
-A lightweight Python framework for orchestrating sequences of LLM API calls with local server management and configuration-driven workflows.
+A terminal-first CLI for managing local LLMs running via `llama-server`. Ensures **STRICT SEQUENTIAL LOADING** — only one model at a time. Cross-platform (Windows/Linux/macOS).
 
 ## Overview
 
-Sequence-LLM simplifies working with Large Language Models by providing:
+Sequence-LLM provides:
 
-- **Configuration-driven workflows**: Define LLM sequences in YAML
-- **Local server management**: Automatic startup/shutdown of compatible LLM servers
-- **OpenAI-compatible API**: Works with any OpenAI-compatible LLM endpoint
-- **Simple CLI**: Easy command-line interface for running workflows
-- **Process lifecycle management**: Handles server processes cleanly
+- **Interactive CLI** (Typer + Rich): commands to switch between profiles, chat, and view status
+- **Single-process management**: Only one `llama-server` running at a time; new profile switch stops the old one
+- **Profile-based config**: Organize models into named profiles (e.g., `brain`, `coder`)
+- **Auto-start on launch**: Attempts to start the default profile (`brain`) on CLI boot
+- **Health polling**: Waits for server readiness via `/health` endpoint (1s intervals, 30s timeout)
+- **Cross-platform**: Works on Windows, Linux, and macOS using `subprocess` + `psutil`
 
 ## Features
 
-- 🔧 **Zero-configuration setup** - sensible defaults for quick start
-- 🚀 **Automatic server management** - spawn and manage LLM servers
-- 📝 **YAML-based configuration** - define workflows declaratively
-- 🔌 **OpenAI-compatible** - works with Ollama, LM Studio, vLLM, and more
-- ✅ **Clean process handling** - proper lifecycle and resource cleanup
-- 🧪 **Well-tested** - comprehensive unit tests included
+- 🧠 **Profile switching**: `/brain`, `/coder`, etc. — seamless model swaps
+- 💬 **Interactive chat loop**: Send messages (just type, no prefix), get prefixed replies
+- 🔄 **Graceful shutdown**: SIGTERM → SIGKILL on profile switch or `/quit`
+- ⚙️ **OS-aware config paths**: Auto-creates config in the right place per OS
+- 🛡️ **Safe port handling**: Kills only matching `llama-server` processes when port is in use
+- 📊 **Status panel**: `/status` displays active model, port, PID, uptime (Rich Panel)
 
 ## Installation
 
 ### Requirements
 
-- Python 3.8 or higher
-- pip or pip3
+- Python 3.9+
+- `llama-server` binary in PATH or configured in `config.yaml`
 
 ### From source
 
 ```bash
-git clone https://github.com/yourusername/Sequence-LLM.git
+git clone https://github.com/Ananay28425/Sequence-LLM.git
 cd Sequence-LLM
 pip install -e .
 ```
 
+This installs the `seq-llm` command.
+
 ## Quick Start
 
-### 1. Create a configuration file (`config.yaml`)
-
-```yaml
-server:
-  host: localhost
-  port: 11434
-  type: ollama
-  
-models:
-  - name: llama2
-    prompt: "Explain quantum computing"
-  - name: mistral
-    prompt: "What are the implications?"
-```
-
-### 2. Run a workflow
+### 1. Launch the CLI
 
 ```bash
-seq-llm run config.yaml
+seq-llm
+```
+
+On first run, a default config is created at:
+- **Windows**: `%APPDATA%\sequence-llm\config.yaml`
+- **Linux**: `~/.config/sequence-llm/config.yaml`
+- **macOS**: `~/Library/Application Support/sequence-llm/config.yaml`
+
+The CLI auto-attempts to start the `brain` profile. If it fails, you'll see a warning.
+
+### 2. Edit the config file
+
+Update the paths to your `llama-server` binary and model files:
+
+```yaml
+llama_server: "/opt/llama-server/llama-server"
+
+defaults:
+  threads: 6
+  threads_batch: 8
+  batch_size: 512
+
+profiles:
+  brain:
+    name: "Brain (GLM-4.7-Flash)"
+    model_path: "/path/to/model.gguf"
+    system_prompt: "/path/to/system.txt"
+    port: 8081
+    ctx_size: 16384
+    temperature: 0.7
+
+  coder:
+    name: "Coder (Qwen2.5-Coder-7B)"
+    model_path: "/path/to/coder.gguf"
+    system_prompt: "/path/to/coder_system.txt"
+    port: 8082
+    ctx_size: 32768
+    temperature: 0.3
+```
+
+### 3. Use the CLI
+
+```
+You> /status
+  → Shows active model, port, health status
+
+You> /brain
+  → Switches to brain profile (stops current server, starts brain)
+
+You> /coder
+  → Switches to coder profile
+
+You> Hello, how are you?
+  → Sends message to active model (prefixed reply: "Brain> ...")
+
+You> /clear
+  → Clears conversation history (does NOT stop server)
+
+You> /quit
+  → Stops server and exits CLI
 ```
 
 ## Configuration
 
-See [Configuration Documentation](docs/index.md) for detailed options.
+See [docs/installation.md](docs/installation.md) and [docs/usage.md](docs/usage.md) for detailed guides.
 
-### Basic Structure
+### Config Schema
 
 ```yaml
-server:
-  host: localhost
-  port: 11434
-  type: ollama  # or custom
+llama_server: "<path to llama-server binary>"
 
-models:
-  - name: model-name
-    prompt: "Your prompt here"
-    temperature: 0.7
-    max_tokens: 512
+defaults:             # Default args passed to all llama-server invocations
+  threads: 6
+  threads_batch: 8
+  batch_size: 512
+
+profiles:             # Named model profiles
+  <profile_name>:
+    name: "<human-readable name>"
+    model_path: "<path to .gguf or model file>"
+    system_prompt: "<path to system prompt file>"
+    port: <port number>
+    ctx_size: <context size>
+    temperature: <float 0.0-2.0>
 ```
 
-## Usage Examples
+### Full Config Example
 
-### Python API
-
-```python
-from seq_llm.core.api_client import OpenAIClient
-from seq_llm.config import load_config
-
-config = load_config('config.yaml')
-client = OpenAIClient(config.server)
-
-response = client.chat_completion(
-    model='llama2',
-    messages=[{'role': 'user', 'content': 'Hello!'}]
-)
-print(response)
-```
-
-### Command Line
-
-```bash
-# Run a workflow
-seq-llm run config.yaml
-
-# Show configuration
-seq-llm config config.yaml
-
-# Start/stop server manually
-seq-llm server start --host localhost --port 11434
-seq-llm server stop
-```
+See [tests/fixtures/sample_config.yaml](tests/fixtures/sample_config.yaml).
 
 ## Project Structure
 
 ```
-Sequence-LLM/
-├── src/seq_llm/          # Main package
-│   ├── cli.py            # CLI entry point
-│   ├── config.py         # Configuration management
+sequence-llm/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── docs/
+│   ├── index.md
+│   ├── installation.md
+│   └── usage.md
+├── examples/
+│   └── basic_workflow.md
+├── src/seq_llm/
+│   ├── __init__.py
+│   ├── cli.py                 # Interactive CLI (Typer + Rich)
+│   ├── config.py              # Config loading/validation (dataclasses + YAML)
 │   └── core/
-│       ├── server_manager.py   # Process lifecycle
-│       └── api_client.py       # API client
-├── tests/                # Test suite
-├── docs/                 # Documentation
-├── examples/             # Example workflows
-└── README.md            # This file
+│       ├── __init__.py
+│       ├── server_manager.py  # llama-server lifecycle (subprocess + psutil)
+│       └── api_client.py      # Chat completions API (httpx streaming)
+├── tests/
+│   ├── fixtures/
+│   │   └── sample_config.yaml
+│   └── unit/
+│       ├── test_config.py
+│       └── test_server_manager.py
+├── .gitignore
+├── LICENSE
+├── pyproject.toml
+├── README.md
+└── requirements.txt
+```
+
+## Tech Stack
+
+- **CLI**: Typer + Rich (interactive, styled terminal UI)
+- **Config**: `dataclasses` + `pyyaml` (simple, no Pydantic)
+- **Process management**: `subprocess` + `psutil` (cross-platform)
+- **HTTP client**: `httpx` (sync mode, streaming support)
+- **Tests**: `pytest` (unit tests with mocks)
+
+## Testing
+
+```bash
+pip install -e ".[dev]"
+pytest tests/ -v
 ```
 
 ## Documentation
 
 - [Installation Guide](docs/installation.md)
 - [Usage Guide](docs/usage.md)
-- [API Documentation](docs/index.md)
-- [Examples](examples/)
+- [API Reference](docs/index.md)
+- [Example Workflow](examples/basic_workflow.md)
 
-## Development
+## License
 
-### Running Tests
+MIT — see [LICENSE](LICENSE)
 
-```bash
-pip install -e ".[dev]"
-pytest tests/
-```
-
-### Building Documentation
-
-```bash
-cd docs
-# Documentation uses Markdown
-```
 
 ## Contributing
 
