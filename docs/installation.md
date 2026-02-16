@@ -2,16 +2,19 @@
 
 ## Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
-- Git
+- **Python 3.9+** (required)
+- **llama-server binary** (required for local model serving)
+  - Download from: https://github.com/ggerganov/llama.cpp/releases
+  - Or install via package manager (e.g., `brew install llama-cpp`)
+- **pip** (Python package manager)
+- **Git**
 
 ## From Source
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/Sequence-LLM.git
+git clone https://github.com/Ananay28425/Sequence-LLM.git
 cd Sequence-LLM
 ```
 
@@ -21,18 +24,28 @@ Install in development mode:
 pip install -e .
 ```
 
-Or install with all development dependencies:
+Or install with all development dependencies for testing:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-## From PyPI
+## Virtual Environment (Recommended)
 
-Once published, you can install directly:
+Create and activate a virtual environment:
 
 ```bash
-pip install sequence-llm
+# Create
+python -m venv venv
+
+# Activate (Windows)
+venv\Scripts\activate
+
+# Activate (macOS/Linux)
+source venv/bin/activate
+
+# Install
+pip install -e .
 ```
 
 ## Verify Installation
@@ -40,48 +53,75 @@ pip install sequence-llm
 Check that the CLI is available:
 
 ```bash
-seq-llm --version
 seq-llm --help
 ```
 
-## Dependencies
+You should see the Typer app help message.
 
-The package requires:
-- `openai>=0.27.0` - OpenAI API client
-- `pyyaml>=6.0` - YAML configuration parsing
-- `click>=8.0` - CLI framework
-- `requests>=2.28.0` - HTTP library
+## Runtime Dependencies
+
+The package installs these automatically:
+
+- `typer[all]>=0.7.0` — CLI framework (async/sync)
+- `rich>=13.0.0` — Terminal styling and UI
+- `httpx>=0.24.0` — HTTP client (sync mode, streaming)
+- `psutil>=5.9.0` — Cross-platform process utilities
+- `pyyaml>=6.0` — YAML configuration parsing
+- `requests>=2.28.0` — HTTP library (health checks)
+
+## llama-server Setup
+
+1. **Download llama.cpp**:
+   ```bash
+   # via Homebrew (macOS)
+   brew install llama-cpp
+
+   # via release binary (all platforms)
+   wget https://github.com/ggerganov/llama.cpp/releases/download/b<version>/llama-<platform>.zip
+   unzip llama-<platform>.zip
+   ```
+
+2. **Verify installation**:
+   ```bash
+   llama-server --version
+   ```
+
+3. **Update config.yaml** with the path:
+   ```yaml
+   llama_server: "/usr/local/bin/llama-server"  # macOS/Linux
+   # or
+   llama_server: "C:\\path\\to\\llama-server.exe"  # Windows
+   ```
 
 ## Troubleshooting
 
 ### Command not found: seq-llm
 
-If the CLI command is not found after installation, try:
+Ensure the Python Scripts directory is in your PATH:
 
-1. Ensure the Python Scripts directory is in your PATH
-2. Reinstall the package: `pip install --force-reinstall -e .`
-3. Check your Python environment: `which python` (or `where python` on Windows)
+```bash
+# Verify installation
+python -c "import seq_llm; print('OK')"
+
+# Reinstall
+pip install --force-reinstall -e .
+```
+
+### llama-server not found
+
+Update `config.yaml` with the full path to the `llama-server` binary. See [Configuration](../docs/usage.md#configuration).
 
 ### Import errors
 
-If you encounter import errors, verify your installation:
+Test the package:
 
 ```bash
-python -c "import seq_llm; print(seq_llm.__version__)"
+python -c "from seq_llm.config import Config; print('OK')"
 ```
 
-### Virtual Environment (Recommended)
+### Health check fails on startup
 
-It's recommended to use a virtual environment:
+- Ensure `llama-server` is installed and the path in `config.yaml` is correct
+- Check that the model path is valid
+- Try starting the server manually: `llama-server -m /path/to/model.gguf --port 8081`
 
-```bash
-python -m venv venv
-
-# On Windows
-venv\Scripts\activate
-
-# On macOS/Linux
-source venv/bin/activate
-
-pip install -e .
-```
