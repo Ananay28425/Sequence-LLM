@@ -90,17 +90,18 @@ models:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
             f.write(yaml_content)
             f.flush()
+            tmp_path = f.name
 
-            try:
-                config = Config.from_yaml(f.name)
-                assert config.server.host == "127.0.0.1"
-                assert config.server.port == 8000
-                assert config.server.workers == 4
-                assert len(config.models) == 2
-                assert config.models[0].name == "ollama-model"
-                assert config.models[1].name == "openai-model"
-            finally:
-                os.unlink(f.name)
+        try:
+            config = Config.from_yaml(tmp_path)
+            assert config.server.host == "127.0.0.1"
+            assert config.server.port == 8000
+            assert config.server.workers == 4
+            assert len(config.models) == 2
+            assert config.models[0].name == "ollama-model"
+            assert config.models[1].name == "openai-model"
+        finally:
+            os.unlink(tmp_path)
 
     def test_config_get_model(self):
         """Test getting a model by name"""
