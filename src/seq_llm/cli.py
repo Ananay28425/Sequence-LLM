@@ -67,7 +67,7 @@ class CLIState:
 
         # Stop existing server if running
         if self.manager:
-            with Live(Spinner("spin", text="Stopping server..."), console=console):
+            with Live(Spinner("dots", text="Stopping server..."), console=console):
                 self.manager.stop()
             self.manager = None
             self.active_profile = None
@@ -86,7 +86,7 @@ class CLIState:
         self.manager = ServerManager(server_command=cmd, port=profile.port, timeout=30)
 
         with Live(
-            Spinner("spin", text=f"Starting {profile.name}..."), console=console
+            Spinner("dots", text=f"Starting {profile.name}..."), console=console
         ):
             self.manager.start()
             ready = self.manager.wait_for_ready(timeout=30)
