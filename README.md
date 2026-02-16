@@ -44,6 +44,7 @@ This installs the `seq-llm` command.
 ### 1. Launch the CLI
 
 ```bash
+pip install sequence-llm
 seq-llm
 ```
 
