@@ -234,14 +234,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 For issues, questions, or suggestions, please open an issue on [GitHub](https://github.com/yourusername/Sequence-LLM/issues).
 
-## Roadmap
-
-- [ ] Support for model chaining and complex workflows
-- [ ] Web UI for workflow visualization
-- [ ] Integration with more LLM providers
-- [ ] Performance optimization and caching
-- [ ] Advanced error handling and retries
-
 ---
 
 **Sequence-LLM** - Orchestrate LLM sequences with ease.
