@@ -137,7 +137,7 @@ pytest -v
 
 ## License
 
-MIT License. See LICENSE file for details.
+AGPL-3.0 License. See LICENSE file for details.
 
 ## Contributing
 
