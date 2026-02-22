@@ -216,7 +216,7 @@ def main():
 
             # Send to model (mock for now)
             profile = state.config.get_model(state.active_profile)
-            console.print(f"[green]{profile.name}[/green]> ", end="", flush=True)
+            user_input = input(f"{profile.name}> ")
 
             # In real implementation, would use APIClient to stream chat
             # For now just echo (placeholder)
