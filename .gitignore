@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# --- Python Specific ---
 __pycache__/
 *.py[cod]
-*$py.class
-
-# C extensions
+*.class
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,123 +16,52 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
+# --- Environments ---
+.venv/
+venv/
+ENV/
+env/
+# Specific to your machine
+.base/
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# --- Sensitive Files (CRITICAL) ---
+.env
+.pypirc
+secrets.json
+*.key
+*.pem
 
-# Unit test / coverage reports
-htmlcov/
+# --- LLM & Data Specific ---
+# Don't accidentally push 10GB models
+*.gguf
+*.bin
+*.onnx
+models/
+data/
+*.log
+
+# --- Testing & Coverage ---
+.target/
+.pytest_cache/
 .tox/
 .nox/
 .coverage
-.coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
-.pytest_cache/
 
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# IDE
+# --- IDEs & OS ---
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
+.zed/
 .DS_Store
 Thumbs.db
-
-# Project specific
-*.yaml
-*.yml
-!tests/fixtures/*.yaml
-!.github/workflows/*.yml
-config.yaml
-config.yml

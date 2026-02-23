@@ -101,7 +101,14 @@ class CLIState:
             console.print(f"[red]Error building command: {e}")
             return False
 
-        self.manager = ServerManager(server_command=cmd, port=profile.port, timeout=30)
+        self.manager = ServerManager()
+
+        self.manager.start(
+            model_path=profile.endpoint,
+            port=profile.port,
+            args=profile.to_command_args()
+        )
+
 
         # Start the server and wait for readiness
         # First startup can take longer as model needs to load
