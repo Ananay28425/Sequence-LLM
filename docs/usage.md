@@ -157,15 +157,23 @@ profile = config.get_model("brain")
 
 # Start server
 manager = ServerManager(
-    server_command=["llama-server", "-m", profile.endpoint],
-    port=profile.model_type,  # Adjust as needed
-    timeout=30
+    llama_server_bin=config.llama_server or "llama-server"
 )
-manager.start()
-manager.wait_for_ready()
+
+# profile.endpoint is derived from `model_path` for local profiles
+model_path = profile.endpoint
+port = profile.port
+server_args = ["--ctx-size", str(profile.ctx_size), "--threads", str(profile.threads)]
+
+# start() launches llama-server and performs an initial health check
+manager.start(model_path=model_path, port=port, args=server_args)
+
+# wait_for_health() can be called again with custom timeout/interval if desired.
+# It returns True on HTTP 200 from /health and raises TimeoutError otherwise.
+manager.wait_for_health(port=port, timeout=60, interval=1.0)
 
 # Send chat via API
-client = APIClient(base_url=manager.get_base_url())
+client = APIClient(base_url=f"http://127.0.0.1:{port}")
 for chunk in client.stream_chat(
     messages=[{"role": "user", "content": "Hello!"}],
     model="local"
@@ -208,7 +216,7 @@ client.close()
 
 The health check polls `/health` every 1 second for up to 30 seconds. Large models may take longer.
 
-**Solution**: Increase `timeout` in `ServerManager` instantiation (Python API) or wait longer (CLI will eventually show failure).
+**Solution**: In Python API usage, call `wait_for_health(port=..., timeout=...)` with a larger timeout (or rely on the default 30s in `start()`), then retry startup.
 
 ## Performance Tips
 
@@ -216,4 +224,3 @@ The health check polls `/health` every 1 second for up to 30 seconds. Large mode
 2. **Tune context size**: Smaller `ctx_size` = faster inference
 3. **Use moderate temperature**: 0.0 = deterministic, 0.7 = balanced, 1.0+ = more creative
 4. **Monitor resources**: Use system monitor or `psutil` to watch CPU/memory during inference
-
