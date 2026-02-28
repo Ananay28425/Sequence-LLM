@@ -1,11 +1,9 @@
-# src/seq_llm/core/server_manager.py
 from __future__ import annotations
 
 import os
 import socket
 import subprocess
 import time
-from pathlib import Path
 from typing import Dict, Optional
 
 import psutil
@@ -13,6 +11,12 @@ import requests
 
 
 class ServerManager:
+    LLAMA_SERVER_SIGNATURES = (
+        "llama-server",
+        "llama_cpp.server",
+        "llama.cpp",
+    )
+
     def __init__(self, llama_server_bin: str = "llama-server", health_path: str = "/health"):
         self.llama_server_bin = llama_server_bin
         self.proc: Optional[subprocess.Popen] = None
@@ -43,21 +47,49 @@ class ServerManager:
             except Exception:
                 pass
 
-    def _reclaim_port_processes(self, port: int):
-        """Kill processes that are listening on `port` and match llama-server binary if possible."""
+    def _is_known_llama_server_process(self, process: psutil.Process) -> bool:
+        try:
+            candidates = [process.exe(), process.name(), *process.cmdline()]
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return False
+
+        lowered = " ".join(part.lower() for part in candidates if part)
+        return any(signature in lowered for signature in self.LLAMA_SERVER_SIGNATURES)
+
+    def _reclaim_port_processes(self, port: int, strict: bool = True):
+        """Kill listeners on `port` only when they are tracked or match known llama-server signatures."""
         for conn in psutil.net_connections(kind='inet'):
-            if conn.laddr and conn.laddr.port == port:
-                if conn.pid:
-                    try:
-                        p = psutil.Process(conn.pid)
-                        # Only kill if executable path looks like llama-server or user explicitly forced
-                        exe = (p.exe() or "").lower()
-                        if (
-                            "llama" in exe or True
-                        ):  # conservative: allow kill but be careful in production
-                            self._kill_process(conn.pid)
-                    except Exception:
-                        pass
+            if not conn.laddr or conn.laddr.port != port:
+                continue
+
+            if not conn.pid:
+                if strict:
+                    raise RuntimeError(
+                        f"Port {port} is in use by an unidentifiable process. "
+                        "Strict mode prevents reclaiming this port."
+                    )
+                continue
+
+            try:
+                process = psutil.Process(conn.pid)
+            except psutil.NoSuchProcess:
+                continue
+
+            is_tracked = self.pid == conn.pid
+            is_known_llama = self._is_known_llama_server_process(process)
+            if is_tracked or is_known_llama:
+                self._kill_process(conn.pid)
+                continue
+
+            if strict:
+                try:
+                    cmdline = " ".join(process.cmdline()) or process.name()
+                except (psutil.AccessDenied, psutil.ZombieProcess):
+                    cmdline = process.name()
+                raise RuntimeError(
+                    f"Port {port} is in use by PID {conn.pid} ({cmdline}). "
+                    "Refusing to terminate a non-llama process in strict mode."
+                )
 
     def start(
         self,
@@ -66,6 +98,7 @@ class ServerManager:
         args: Optional[list] = None,
         extra_env: Optional[Dict] = None,
         auto_restart: bool = False,
+        strict_port_reclaim: bool = True,
     ):
         """
         Start llama-server with model path and return once health endpoint is ready or raise TimeoutError.
@@ -76,7 +109,7 @@ class ServerManager:
             env.update(extra_env)
         # If something is on port, try to reclaim
         if self._is_port_open("127.0.0.1", port):
-            self._reclaim_port_processes(port)
+            self._reclaim_port_processes(port, strict=strict_port_reclaim)
             # small wait for kernel sockets to clear
             time.sleep(0.5)
 
