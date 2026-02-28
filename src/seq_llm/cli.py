@@ -83,6 +83,8 @@ class CLIState:
             )
             return False
 
+        had_active_profile = self.active_profile is not None
+
         # Stop existing server if running
         if self.manager:
             with Live(Spinner("dots", text="Stopping server..."), console=console):
@@ -90,7 +92,7 @@ class CLIState:
             self.manager = None
             self.active_profile = None
 
-        # Build command from profile config
+        # Build command args from profile config
         try:
             cmd = build_llama_server_command(
                 self.config.llama_server,
@@ -101,44 +103,30 @@ class CLIState:
             console.print(f"[red]Error building command: {e}")
             return False
 
-        self.manager = ServerManager()
+        # Command form: [exe, -m MODEL, --port PORT, <extra args...>]
+        startup_args = cmd[5:]
 
-        self.manager.start(
-            model_path=profile.endpoint,
-            port=profile.port,
-            args=profile.to_command_args()
-        )
-
+        self.manager = ServerManager(llama_server_bin=self.config.llama_server)
 
         # Start the server and wait for readiness
-        # First startup can take longer as model needs to load
         console.print(f"[cyan]Starting {profile.name}...")
         console.print(f"[dim]Loading model from {profile.endpoint}")
         try:
-            self.manager.start()
-        except FileNotFoundError as e:
-            console.print(f"[red]Error: {e}")
-            return False
-
-        # Extended timeout for first startup (model loading can take time)
-        startup_timeout = 120 if not self.active_profile else 60
-        console.print(f"[dim]Waiting for server ready (timeout: {startup_timeout}s)...")
-        ready = self.manager.wait_for_ready(timeout=startup_timeout)
-
-        if not ready:
-            console.print(
-                f"[red]Error: {profile.name} failed to start within {startup_timeout}s\n"
-                f"[yellow]Make sure:\n"
-                f"  1. Model file exists: {profile.endpoint}\n"
-                f"  2. Port {profile.port} is not in use\n"
-                f"  3. System has enough RAM/resources"
+            startup_timeout = 120 if not had_active_profile else 60
+            self.manager.start(
+                model_path=profile.endpoint,
+                port=profile.port,
+                args=startup_args,
             )
+            self.manager.wait_for_health(port=profile.port, timeout=startup_timeout)
+        except (FileNotFoundError, TimeoutError) as e:
+            console.print(f"[red]Error: {e}")
             self.manager.stop()
             self.manager = None
             return False
 
         self.active_profile = profile_name
-        console.print(f"[green]✓ {profile.name} started on port {self.manager.get_port()}")
+        console.print(f"[green]✓ {profile.name} started on port {profile.port}")
         return True
 
     def show_status(self):
@@ -151,9 +139,13 @@ class CLIState:
         if not profile:
             return
 
+        client = APIClient(base_url=f"http://127.0.0.1:{profile.port}")
+        is_healthy = client.health_check()
+        client.close()
+
         status_text = f"Active: {profile.name}\n"
-        status_text += f"Port: {self.manager.get_port()}\n"
-        status_text += f"Health: {'✓ Ready' if self.manager.is_ready() else '✗ Not ready'}"
+        status_text += f"Port: {profile.port}\n"
+        status_text += f"Health: {'✓ Ready' if is_healthy else '✗ Not ready'}"
 
         console.print(
             Panel(status_text, title="[bold]Server Status", border_style="green")
@@ -221,13 +213,25 @@ def main():
             # Add user message to history
             state.conversation.append({"role": "user", "content": user_input})
 
-            # Send to model (mock for now)
+            # Send conversation to active model endpoint
             profile = state.config.get_model(state.active_profile)
-            user_input = input(f"{profile.name}> ")
+            if not profile:
+                console.print("[red]ERROR: Active profile not found in configuration")
+                continue
 
-            # In real implementation, would use APIClient to stream chat
-            # For now just echo (placeholder)
-            console.print(f"(echo) {user_input}")
+            assistant_response = ""
+            try:
+                with APIClient(base_url=f"http://127.0.0.1:{profile.port}") as client:
+                    for chunk in client.stream_chat(state.conversation, model=profile.name):
+                        console.print(chunk, end="")
+                        assistant_response += chunk
+                    console.print("")
+            except Exception as e:
+                console.print(f"[red]ERROR: Failed to stream chat: {e}")
+                continue
+
+            if assistant_response:
+                state.conversation.append({"role": "assistant", "content": assistant_response})
 
 
 if __name__ == "__main__":
@@ -243,4 +247,3 @@ if __name__ == "__main__":
         if state.manager:
             state.manager.stop()
         sys.exit(1)
-
