@@ -103,8 +103,42 @@ class ServerManager:
     ):
         """
         Start llama-server with model path and return once health endpoint is ready or raise TimeoutError.
+
+        Contract: ``args`` must only include supplemental flags. Model/port ownership
+        belongs to this method and duplicate model/port flags are rejected.
         """
         args = args or []
+        reserved_flags = {"-m", "--model", "-p", "--port"}
+        if any(str(arg) in reserved_flags for arg in args):
+            raise ValueError(
+                "start(..., args=...) must not include model/port flags. "
+                "Pass only supplemental arguments."
+            )
+
+        cmd = [self.llama_server_bin, "--model", model_path, "--port", str(port)] + list(args)
+        self.start_cmd(
+            cmd=cmd,
+            port=port,
+            extra_env=extra_env,
+            auto_restart=auto_restart,
+            strict_port_reclaim=strict_port_reclaim,
+            startup_timeout=startup_timeout,
+        )
+
+    def start_cmd(
+        self,
+        cmd: list[str],
+        port: int,
+        extra_env: Optional[Dict] = None,
+        auto_restart: bool = False,
+        strict_port_reclaim: bool = True,
+        startup_timeout: int = 30,
+    ):
+        """Start llama-server from a fully assembled command list.
+
+        ``cmd`` is treated as the single source of truth for CLI flags/order.
+        ``port`` is explicit so health checks and port reclaim remain deterministic.
+        """
         env = os.environ.copy()
         if extra_env:
             env.update(extra_env)
@@ -114,7 +148,6 @@ class ServerManager:
             # small wait for kernel sockets to clear
             time.sleep(0.5)
 
-        cmd = [self.llama_server_bin, "--model", model_path, "--port", str(port)] + args
         # Start process
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
         self.pid = self.proc.pid

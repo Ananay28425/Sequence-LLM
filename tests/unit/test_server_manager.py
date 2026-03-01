@@ -120,3 +120,39 @@ def test_start_waits_once_with_configured_timeout(monkeypatch):
     manager.start(model_path="model.gguf", port=8080, startup_timeout=77)
 
     assert calls == [(8080, 77, 1.0)]
+
+
+def test_start_rejects_model_or_port_flags_in_args():
+    manager = ServerManager()
+
+    with pytest.raises(ValueError, match="must not include model/port flags"):
+        manager.start(model_path="model.gguf", port=8080, args=["--port", "8081"])
+
+
+def test_start_cmd_uses_explicit_command(monkeypatch):
+    manager = ServerManager()
+
+    class DummyProc:
+        pid = 4444
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+    monkeypatch.setattr(manager, "_is_port_open", lambda host, port: False)
+
+    popen_calls = []
+
+    def _popen(cmd, stdout, stderr, env):
+        popen_calls.append(cmd)
+        return DummyProc()
+
+    monkeypatch.setattr("seq_llm.core.server_manager.subprocess.Popen", _popen)
+    monkeypatch.setattr(manager, "wait_for_health", lambda port, timeout, interval=1.0: True)
+
+    cmd = ["/bin/llama-server", "--model", "x.gguf", "--port", "8089", "--threads", "8"]
+    manager.start_cmd(cmd=cmd, port=8089)
+
+    assert popen_calls == [cmd]

@@ -1,4 +1,12 @@
-"""Build llama-server command-line arguments from profile_cfg configuration."""
+"""Build llama-server command-line arguments from profile_cfg configuration.
+
+Compatibility policy:
+- The builder emits the long-form `--model` and `--port` flags first.
+- `ServerManager.start_cmd(...)` treats this full command as authoritative.
+- `ServerManager.start(...)` owns model/port internally and only accepts
+  supplemental args, preserving backwards compatibility for callers that do
+  not provide model/port in `args`.
+"""
 
 from __future__ import annotations
 from pathlib import Path
@@ -35,11 +43,11 @@ def build_llama_server_command(
 
     cmd: List[str] = [str(llama_server_path)]
 
-    # Model path (required) - stored in endpoint
+    # Model path (required) - use canonical long flag for compatibility.
     model_path = getattr(profile_cfg, "endpoint", None)
     if not model_path or "://" in model_path:
         raise ValueError(f"Invalid model path for profile {profile_cfg.name}: {model_path}")
-    cmd.extend(["-m", str(model_path)])
+    cmd.extend(["--model", str(model_path)])
 
     # Port (required)
     cmd.extend(["--port", str(profile_cfg.port)])
