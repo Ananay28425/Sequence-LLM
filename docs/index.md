@@ -1,18 +1,18 @@
 # Sequence-LLM Documentation
 
-A terminal-first CLI for managing local LLMs via `llama-server`. Ensures **only one model runs at a time** with seamless profile switching.
+A terminal-first CLI for managing local LLMs via `llama-server`. Ensures only one model runs at a time with seamless profile switching.
 
 ## Table of Contents
 
-- [Installation](./installation.md) — Setup and dependencies
-- [Usage](./usage.md) — Interactive CLI, configuration, and commands
-- [Examples](../examples/basic_workflow.md) — Sample workflows and patterns
+- [Installation](./installation.md) - Setup and dependencies
+- [Usage](./usage.md) - Interactive CLI, configuration, and commands
+- [Examples](../examples/basic_workflow.md) - Sample workflows and patterns
 
 ## Quick Start
 
 ```bash
 # 1. Install
-pip install -e .
+pip install sequence-llm
 
 # 2. Launch interactive CLI
 seq-llm
@@ -25,32 +25,34 @@ seq-llm
 # 4. Edit the config to point to your llama-server and models
 
 # 5. Use commands:
-#    /brain    — switch to brain profile
-#    /coder    — switch to coder profile
-#    /status   — show active model status
-#    /clear    — clear conversation history
-#    /quit     — stop server and exit
-#    (text)    — send chat message to active model
+#    /brain    - switch to brain profile
+#    /coder    - switch to coder profile
+#    /status   - show active model status
+#    /clear    - clear conversation history
+#    /quit     - stop server and exit
+#    (text)    - send chat message to active model
 ```
 
 ## Key Features
 
-- 🧠 **Profile-based profiles**: Define named profiles (brain, coder, etc.) in YAML
-- 💬 **Interactive CLI**: Typer + Rich for beautiful terminal UI
-- 🔄 **Sequential loading**: Only one `llama-server` at a time; switching kills the old one
-- ⚙️ **Auto-config**: Creates sensible defaults on first run
-- 📊 **Status panel**: Rich-formatted output showing active model, port, health
-- 🛡️ **Safe shutdown**: Graceful SIGTERM → SIGKILL on profile switch or exit
-- 🔌 **Cross-platform**: Windows, Linux, macOS (uses `subprocess` + `psutil`)
+- Profile-based profiles: Define named profiles (brain, coder, etc.) in YAML
+- Interactive CLI: Typer + Rich for a modern terminal UI
+- Sequential loading: Only one `llama-server` at a time; switching stops the old server
+- Auto-config: Creates sensible defaults on first run
+- Status panel: Rich-formatted output showing active model, port, health
+- Safe shutdown: Graceful SIGTERM then SIGKILL on profile switch or exit
+- Log capture: Server stdout and stderr are written to user logs for diagnostics
+- Context safety guard: Prevents conversation overflow of model context window
+- Cross-platform: Windows, Linux, macOS
 
 ## Architecture
 
 Three core modules:
 
-1. **Config** (`config.py`) — Load/validate YAML profiles, OS-aware config paths
-2. **ServerManager** (`core/server_manager.py`) — Start/stop `llama-server`, health polling
-3. **APIClient** (`core/api_client.py`) — Stream chat completions via `httpx`
-4. **CLI** (`cli.py`) — Typer + Rich interactive loop
+1. Config (`config.py`) - Load and validate YAML profiles, OS-aware config paths
+2. ServerManager (`core/server_manager.py`) - Start and stop `llama-server`, health polling, log capture
+3. APIClient (`core/api_client.py`) - Stream chat completions via `httpx`
+4. CLI (`cli.py`) - Typer and Rich interactive loop
 
 ## Configuration Schema
 
@@ -76,34 +78,28 @@ See [Usage](./usage.md) for full reference.
 
 ## Tech Stack
 
-- **CLI**: Typer + Rich (modern async/sync, beautiful UI)
-- **Config**: dataclasses + pyyaml (simple, no Pydantic)
-- **Process**: subprocess + psutil (cross-platform)
-- **HTTP**: httpx (sync mode, streaming)
-- **Tests**: pytest (unit tests with mocks)
+- CLI: Typer + Rich
+- Config: dataclasses + pyyaml
+- Process: subprocess + psutil
+- HTTP: httpx (sync streaming)
+- Tests: pytest
 
 ## File Structure
 
 ```
 sequence-llm/
 ├── src/seq_llm/
-│   ├── cli.py              # Interactive CLI entry point
-│   ├── config.py           # YAML config + dataclasses
+│   ├── cli.py
+│   ├── config.py
 │   └── core/
-│       ├── server_manager.py    # Process lifecycle
-│       └── api_client.py        # Chat API streaming
+│       ├── server_manager.py
+│       └── api_client.py
 ├── tests/
-│   ├── unit/
-│   │   ├── test_config.py
-│   │   └── test_server_manager.py
-│   └── fixtures/
-│       └── sample_config.yaml
 ├── docs/
-│   ├── index.md            # This file
+│   ├── index.md
 │   ├── installation.md
 │   └── usage.md
 ├── examples/
-│   └── basic_workflow.md
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -118,19 +114,18 @@ pytest tests/ -v
 
 ## Getting Help
 
-- **[Installation](./installation.md)** — System setup, dependencies, llama-server
-- **[Usage](./usage.md)** — Commands, configuration, troubleshooting
-- **[Examples](../examples/basic_workflow.md)** — Real-world patterns
+- See [Installation](./installation.md)
+- See [Usage](./usage.md)
+- See [Examples](../examples/basic_workflow.md)
 
 ## Platform Support
 
-| OS | Status | Notes |
-|---|---|---|
-| Windows | ✅ In dev, auto-config to `%APPDATA%\sequence-llm\config.yaml` |
-| macOS | ✅ Auto-config to `~/Library/Application Support/sequence-llm/config.yaml` |
-| Linux | ✅ Auto-config to `~/.config/sequence-llm/config.yaml` |
+| OS      | Status    | Notes                                                                 |
+| ------- | --------- | --------------------------------------------------------------------- |
+| Windows | Supported | Config path: `%APPDATA%\sequence-llm\config.yaml`                     |
+| macOS   | Supported | Config path: `~/Library/Application Support/sequence-llm/config.yaml` |
+| Linux   | Supported | Config path: `~/.config/sequence-llm/config.yaml`                     |
 
 ## License
 
-MIT — See [LICENSE](../LICENSE)
-
+AGPL 3.0 - See LICENSE

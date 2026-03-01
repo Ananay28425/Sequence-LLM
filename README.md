@@ -1,10 +1,14 @@
 # Sequence-LLM
 
-Sequence-LLM is a terminal-first CLI for running local LLMs through `llama-server` (llama.cpp) with profile-based model switching and automatic server lifecycle management.
+Sequence-LLM is a **terminal-first orchestration tool** for running local large language models through `llama.cpp` (`llama-server`) with automatic server lifecycle management, profile-based switching, and reproducible workflows.
 
-It is designed for developers who run multiple local models and want a simple, reproducible workflow without writing shell scripts.
+It removes the need to manually start servers, remember commands, or write shell scripts when working with multiple models.
+
+Sequence-LLM works with **any hardware supported by llama.cpp** — CPU, CUDA GPUs, ROCm, Metal, and more.
 
 Cross-platform: Windows, Linux, macOS.
+
+---
 
 ## Why Sequence-LLM
 
@@ -14,6 +18,7 @@ Running local models often involves:
 - Remembering model paths and ports
 - Managing multiple configurations
 - Writing ad-hoc scripts to switch models
+- Repeating setup across machines
 
 Sequence-LLM solves this by providing:
 
@@ -21,6 +26,22 @@ Sequence-LLM solves this by providing:
 - Automatic start and shutdown of servers
 - Interactive chat interface
 - Consistent configuration across machines
+- Deterministic, script-free workflows
+
+---
+
+## Who Is This For
+
+- Developers running multiple local models
+- AI engineers building local pipelines
+- Researchers comparing architectures
+- Self-hosting enthusiasts
+- GPU workstation users
+- CLI-first workflows
+
+If you use tools like `llama.cpp`, with upcoming support for Ollama, LM Studio, or custom scripts - Sequence-LLM simplifies the workflow.
+
+---
 
 ## Features
 
@@ -28,10 +49,41 @@ Sequence-LLM solves this by providing:
 - Profile-based model switching (`/brain`, `/coder`, etc.)
 - Automatic shutdown of previous server before starting a new one
 - Health checking with readiness polling
+- Context-window safety guard (prevents overflow / crashes)
 - Cross-platform process management using subprocess and psutil
 - OS-aware configuration directory creation
 - Conversation history management
 - Status panel showing active model and server info
+- First-run configuration wizard
+
+---
+
+## Hardware Support
+
+Sequence-LLM does **not** perform inference itself.
+
+It orchestrates `llama-server`, meaning it works with:
+
+- CPU inference
+- NVIDIA CUDA GPUs
+- AMD ROCm GPUs
+- Apple Metal
+- Any backend supported by llama.cpp
+
+---
+
+## Comparison with Other Tools
+
+| Tool          | Primary Focus | Sequence-LLM Advantage             |
+| ------------- | ------------- | ---------------------------------- |
+| Ollama        | Easy installs | Multi-model orchestration workflow |
+| LM Studio     | GUI           | Lightweight CLI automation         |
+| Raw llama.cpp | Flexible      | No manual scripts needed           |
+| Open-WebUI    | Web UI        | Minimal overhead terminal workflow |
+
+Sequence-LLM sits between simplicity and flexibility.
+
+---
 
 ## Installation
 
@@ -46,12 +98,13 @@ Install from PyPI:
 pip install sequence-llm
 ```
 
+---
+
 ## Quick Start
 
 Run the CLI:
 
 ```bash
-pip install sequence-llm
 seq-llm
 ```
 
@@ -62,6 +115,8 @@ Config locations:
 - Windows: `%APPDATA%\sequence-llm\config.yaml`
 - Linux: `~/.config/sequence-llm/config.yaml`
 - macOS: `~/Library/Application Support/sequence-llm/config.yaml`
+
+---
 
 ## Configuration Example
 
@@ -91,6 +146,8 @@ profiles:
     temperature: 0.3
 ```
 
+---
+
 ## CLI Usage
 
 ```
@@ -103,6 +160,8 @@ profiles:
 
 Typing any text sends a message to the active model.
 
+---
+
 ## Example Workflow
 
 1. Start CLI
@@ -110,16 +169,37 @@ Typing any text sends a message to the active model.
 3. Switch between models using commands
 4. Chat interactively without restarting processes manually
 
+---
+
 ## Architecture
+
+```
+User → CLI → ServerManager → llama-server → Model
+           ↑
+        Config + Profiles
+```
 
 Core components:
 
-- CLI: interactive interface and command routing
-- Server Manager: lifecycle control of llama-server
-- API Client: communication with local inference server
-- Config System: YAML-based profiles and defaults
+- CLI - interactive interface and command routing
+- Server Manager - lifecycle control of llama-server
+- API Client - communication with local inference server
+- Config System - YAML-based profiles and defaults
 
-## Development
+---
+
+## Roadmap
+
+Planned evolution:
+
+- v0.3 — Multi-model named workflows
+- v0.4 — TUI interface
+- v0.5 — Hardware auto-optimization
+- v1.0 — Production stability
+
+---
+
+## For Development and Contributors
 
 Clone repository:
 
@@ -135,9 +215,13 @@ Run tests:
 pytest -v
 ```
 
+---
+
 ## License
 
 AGPL-3.0 License. See LICENSE file for details.
+
+---
 
 ## Contributing
 
@@ -149,6 +233,4 @@ GitHub: https://github.com/Ananay28425/Sequence-LLM
 
 Sequence-LLM provides a lightweight and predictable way to manage local LLM workflows from the terminal.
 
----
-
-**Sequence-LLM** - Orchestrate LLM sequences with ease.
+Sequence-LLM - Orchestrate LLM workflows with ease.
