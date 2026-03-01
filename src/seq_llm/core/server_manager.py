@@ -11,7 +11,7 @@ import requests
 
 
 class ServerManager:
-    LLAMA_SERVER_SIGNATURES = (
+    ALLOWED_RECLAIM_SIGNATURES = (
         "llama-server",
         "llama_cpp.server",
         "llama.cpp",
@@ -21,6 +21,7 @@ class ServerManager:
         self.llama_server_bin = llama_server_bin
         self.proc: Optional[subprocess.Popen] = None
         self.pid: Optional[int] = None
+        self.command: Optional[list[str]] = None
         self.health_path = health_path
         self.auto_restart = False
 
@@ -47,17 +48,31 @@ class ServerManager:
             except Exception:
                 pass
 
-    def _is_known_llama_server_process(self, process: psutil.Process) -> bool:
+    def _is_allowed_reclaim_process(self, process: psutil.Process) -> bool:
         try:
             candidates = [process.exe(), process.name(), *process.cmdline()]
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             return False
 
         lowered = " ".join(part.lower() for part in candidates if part)
-        return any(signature in lowered for signature in self.LLAMA_SERVER_SIGNATURES)
+        return any(signature in lowered for signature in self.ALLOWED_RECLAIM_SIGNATURES)
+
+    def _format_process_identity(self, process: psutil.Process) -> str:
+        try:
+            cmdline = " ".join(process.cmdline())
+        except (psutil.AccessDenied, psutil.ZombieProcess):
+            cmdline = ""
+
+        if cmdline:
+            return cmdline
+
+        try:
+            return process.name()
+        except (psutil.AccessDenied, psutil.ZombieProcess):
+            return "<unknown>"
 
     def _reclaim_port_processes(self, port: int, strict: bool = True):
-        """Kill listeners on `port` only when they are tracked or match known llama-server signatures."""
+        """Kill listeners on `port` only when they are tracked or allowed server processes."""
         for conn in psutil.net_connections(kind='inet'):
             if not conn.laddr or conn.laddr.port != port:
                 continue
@@ -76,19 +91,23 @@ class ServerManager:
                 continue
 
             is_tracked = self.pid == conn.pid
-            is_known_llama = self._is_known_llama_server_process(process)
-            if is_tracked or is_known_llama:
+            is_allowed = self._is_allowed_reclaim_process(process)
+
+            # Prefer reclaiming the exact process that this manager started.
+            if is_tracked:
+                self._kill_process(conn.pid)
+                continue
+
+            if is_allowed:
                 self._kill_process(conn.pid)
                 continue
 
             if strict:
-                try:
-                    cmdline = " ".join(process.cmdline()) or process.name()
-                except (psutil.AccessDenied, psutil.ZombieProcess):
-                    cmdline = process.name()
+                cmdline = self._format_process_identity(process)
                 raise RuntimeError(
                     f"Port {port} is in use by PID {conn.pid} ({cmdline}). "
-                    "Refusing to terminate a non-llama process in strict mode."
+                    "Refusing to terminate a foreign process in strict reclaim mode. "
+                    "Set strict_port_reclaim=False to skip reclaim and fail non-destructively."
                 )
 
     def start(
@@ -117,6 +136,7 @@ class ServerManager:
         # Start process
         self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
         self.pid = self.proc.pid
+        self.command = cmd
         self.auto_restart = bool(auto_restart)
         # Wait for health
         try:
@@ -136,6 +156,7 @@ class ServerManager:
             # reset
             self.proc = None
             self.pid = None
+            self.command = None
 
     def is_running(self) -> bool:
         if self.pid is None:
