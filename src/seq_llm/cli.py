@@ -14,10 +14,11 @@ from rich.table import Table
 from rich.spinner import Spinner
 from rich.live import Live
 
-from seq_llm.config import Config, ensure_default_config, get_default_config_path
+from seq_llm.config import Config, ensure_default_config, save_first_run_setup
 from seq_llm.core.server_manager import ServerManager
 from seq_llm.core.api_client import APIClient
 from seq_llm.core.command_builder import build_llama_server_command
+from seq_llm.models.scanner import discover_models
 
 console = Console()
 app = typer.Typer(help="Sequence-LLM: CLI for managing local LLMs (llama-server)")
@@ -151,6 +152,66 @@ class CLIState:
 state = CLIState()
 
 
+def _is_first_run_needed(config: Config) -> bool:
+    """Return True when required startup fields are missing."""
+    if not config.llama_server:
+        return True
+    return config.get_model("brain") is None or config.get_model("coder") is None
+
+
+def run_first_time_setup() -> bool:
+    """Interactive first-run setup for llama_server and required profiles."""
+    if not state.config_path:
+        return False
+
+    console.print("[yellow]First-time setup required.[/yellow]")
+
+    llama_server = console.input("[blue]Path to llama-server executable[/blue]> ").strip()
+    if not llama_server:
+        console.print("[red]Error: llama-server path is required for first-run setup")
+        return False
+
+    console.print("[cyan]Scanning for model files...[/cyan]")
+    candidates = discover_models()
+    if not candidates:
+        console.print("[red]No candidate model files were discovered")
+        return False
+
+    table = Table(title="Discovered Models")
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column("Path", style="green")
+    table.add_column("Size (GB)", style="magenta", justify="right")
+    for idx, model in enumerate(candidates, start=1):
+        table.add_row(str(idx), str(model.get("path", "")), str(model.get("size_gb", "?")))
+    console.print(table)
+
+    assignments: dict[str, str] = {}
+    for profile_name in ("brain", "coder"):
+        choice = console.input(
+            f"[blue]Select model # for '{profile_name}'[/blue]> "
+        ).strip()
+        try:
+            selected_index = int(choice) - 1
+        except ValueError:
+            console.print(f"[red]Invalid selection for '{profile_name}': {choice}")
+            return False
+
+        if selected_index < 0 or selected_index >= len(candidates):
+            console.print(f"[red]Selection out of range for '{profile_name}': {choice}")
+            return False
+        assignments[profile_name] = str(candidates[selected_index]["path"])
+
+    save_first_run_setup(
+        path=state.config_path,
+        llama_server=llama_server,
+        assignments=assignments,
+    )
+    console.print(f"[green]✓ Saved first-run config to {state.config_path}")
+
+    # Reload updated config then continue normal startup.
+    return state.load_config(state.config_path)
+
+
 # --- Main interactive loop --------------------------------------------------
 def main():
     """Main interactive REPL."""
@@ -159,6 +220,11 @@ def main():
     if not state.load_config():
         console.print("[red]Failed to load configuration")
         raise typer.Exit(1)
+
+    if _is_first_run_needed(state.config):
+        if not run_first_time_setup():
+            console.print("[red]Failed first-time setup")
+            raise typer.Exit(1)
 
     # Auto-start brain profile
     if state.config.get_model("brain"):

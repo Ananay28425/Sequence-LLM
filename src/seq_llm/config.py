@@ -214,3 +214,49 @@ def ensure_default_config(path: Path | None = None) -> Path:
         path.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
     return path
 
+
+def save_first_run_setup(
+    path: str | Path,
+    llama_server: str,
+    assignments: Dict[str, str],
+) -> Path:
+    """Persist first-run setup values to the YAML config file.
+
+    assignments keys are profile names (for this CLI: brain/coder), values are model
+    file paths selected by the user.
+    """
+    config_path = Path(path)
+    raw: Dict[str, Any] = {}
+    if config_path.exists():
+        with config_path.open("r", encoding="utf-8") as f:
+            raw = yaml.safe_load(f) or {}
+
+    raw["llama_server"] = llama_server
+
+    profiles = raw.get("profiles")
+    if not isinstance(profiles, dict):
+        profiles = {}
+
+    defaults_by_profile = {
+        "brain": {"name": "Brain", "port": 8081},
+        "coder": {"name": "Coder", "port": 8082},
+    }
+
+    for profile_name, model_path in assignments.items():
+        existing = profiles.get(profile_name)
+        if not isinstance(existing, dict):
+            existing = {}
+        defaults = defaults_by_profile.get(profile_name, {"name": profile_name, "port": 8080})
+        existing["name"] = existing.get("name") or defaults["name"]
+        existing["model_path"] = model_path
+        existing["port"] = existing.get("port", defaults["port"])
+        profiles[profile_name] = existing
+
+    raw["profiles"] = profiles
+    raw.setdefault("default_model", "brain")
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(raw, f, sort_keys=False)
+
+    return config_path
