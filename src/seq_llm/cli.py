@@ -117,8 +117,8 @@ class CLIState:
                 model_path=profile.endpoint,
                 port=profile.port,
                 args=startup_args,
+                startup_timeout=startup_timeout,
             )
-            self.manager.wait_for_health(port=profile.port, timeout=startup_timeout)
         except (FileNotFoundError, TimeoutError) as e:
             console.print(f"[red]Error: {e}")
             self.manager.stop()

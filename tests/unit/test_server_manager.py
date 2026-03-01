@@ -92,3 +92,31 @@ def test_start_fails_cleanly_when_port_conflict_not_reclaimable(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Port 8080 is in use by PID 9988"):
         manager.start(model_path="model.gguf", port=8080)
+
+
+def test_start_waits_once_with_configured_timeout(monkeypatch):
+    manager = ServerManager()
+
+    class DummyProc:
+        pid = 1234
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            return None
+
+    monkeypatch.setattr(manager, "_is_port_open", lambda host, port: False)
+    monkeypatch.setattr("seq_llm.core.server_manager.subprocess.Popen", lambda *args, **kwargs: DummyProc())
+
+    calls = []
+
+    def _wait_for_health(port, timeout, interval=1.0):
+        calls.append((port, timeout, interval))
+        return True
+
+    monkeypatch.setattr(manager, "wait_for_health", _wait_for_health)
+
+    manager.start(model_path="model.gguf", port=8080, startup_timeout=77)
+
+    assert calls == [(8080, 77, 1.0)]
