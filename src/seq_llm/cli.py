@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import version
 from pathlib import Path
 from typing import List, Optional
 
@@ -213,7 +214,7 @@ def run_first_time_setup() -> bool:
 def main():
     """Main interactive REPL."""
     # Load config (create default if missing)
-    console.print("[cyan]Sequence-LLM v0.2")
+    console.print(f"[cyan]Sequence-LLM v{version('sequence-llm')}")
     if not state.load_config():
         console.print("[red]Failed to load configuration")
         raise typer.Exit(1)
