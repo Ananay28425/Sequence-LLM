@@ -103,9 +103,6 @@ class CLIState:
             console.print(f"[red]Error building command: {e}")
             return False
 
-        # Command form: [exe, -m MODEL, --port PORT, <extra args...>]
-        startup_args = cmd[5:]
-
         self.manager = ServerManager(llama_server_bin=self.config.llama_server)
 
         # Start the server and wait for readiness
@@ -113,10 +110,9 @@ class CLIState:
         console.print(f"[dim]Loading model from {profile.endpoint}")
         try:
             startup_timeout = 120 if not had_active_profile else 60
-            self.manager.start(
-                model_path=profile.endpoint,
+            self.manager.start_cmd(
+                cmd=cmd,
                 port=profile.port,
-                args=startup_args,
                 startup_timeout=startup_timeout,
             )
         except (FileNotFoundError, TimeoutError) as e:
