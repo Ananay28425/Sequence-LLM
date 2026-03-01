@@ -99,6 +99,7 @@ class ServerManager:
         extra_env: Optional[Dict] = None,
         auto_restart: bool = False,
         strict_port_reclaim: bool = True,
+        startup_timeout: int = 30,
     ):
         """
         Start llama-server with model path and return once health endpoint is ready or raise TimeoutError.
@@ -120,7 +121,7 @@ class ServerManager:
         self.auto_restart = bool(auto_restart)
         # Wait for health
         try:
-            self.wait_for_health(port, timeout=30)
+            self.wait_for_health(port, timeout=startup_timeout)
         except Exception:
             # On failure, try to cleanup and rethrow
             if self.proc and self.proc.poll() is None:
