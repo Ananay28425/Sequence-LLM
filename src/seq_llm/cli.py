@@ -222,9 +222,9 @@ def main():
             assistant_response = ""
             try:
                 with APIClient(base_url=f"http://127.0.0.1:{profile.port}") as client:
-                    for chunk in client.stream_chat(state.conversation, model=profile.name):
-                        console.print(chunk, end="")
-                        assistant_response += chunk
+                    for token in client.stream_chat(state.conversation, model=profile.name):
+                        console.print(token, end="")
+                        assistant_response += token
                     console.print("")
             except Exception as e:
                 console.print(f"[red]ERROR: Failed to stream chat: {e}")

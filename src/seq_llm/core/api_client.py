@@ -2,6 +2,7 @@
 OpenAI-compatible API client for interacting with LLM servers.
 """
 
+import json
 import httpx
 from typing import Optional, Any, Dict, List
 
@@ -52,15 +53,52 @@ class APIClient:
     def stream_chat(self, messages: List[Dict[str, str]], model: str = "local"):
         """POST /v1/chat/completions with stream=true and yield text chunks.
 
-        Yields each text chunk emitted by the server (caller responsible for
-        assembling tokens into final text).
+        Parses server-sent events and yields normalized text tokens only.
         """
         payload = {"model": model, "messages": messages, "stream": True}
         with self.client.stream("POST", "/v1/chat/completions", json=payload, timeout=None) as resp:
             resp.raise_for_status()
-            for chunk in resp.iter_text():
-                # httpx yields text chunks as they arrive; forward them to caller
-                yield chunk
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+
+                if line.startswith("event:"):
+                    continue
+
+                if not line.startswith("data:"):
+                    continue
+
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+
+                try:
+                    payload = json.loads(data)
+                except json.JSONDecodeError:
+                    # Ignore malformed event payloads and continue streaming.
+                    continue
+
+                choices = payload.get("choices") or []
+                if not choices:
+                    continue
+
+                choice = choices[0] or {}
+                delta = choice.get("delta") or {}
+
+                text = ""
+                if isinstance(delta, dict):
+                    text = delta.get("content") or ""
+
+                if not text and isinstance(choice, dict):
+                    text = choice.get("text") or ""
+
+                if not text and isinstance(choice, dict):
+                    message = choice.get("message") or {}
+                    if isinstance(message, dict):
+                        text = message.get("content") or ""
+
+                if text:
+                    yield text
 
     def list_models(self) -> Dict[str, Any]:
         response = self.client.get("/models")
