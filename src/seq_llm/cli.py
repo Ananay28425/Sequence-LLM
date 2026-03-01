@@ -5,20 +5,21 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.spinner import Spinner
 from rich.live import Live
+from rich.panel import Panel
+from rich.spinner import Spinner
+from rich.table import Table
 
 from seq_llm.config import Config, ensure_default_config, save_first_run_setup
-from seq_llm.core.server_manager import ServerManager
 from seq_llm.core.api_client import APIClient
 from seq_llm.core.command_builder import build_llama_server_command
+from seq_llm.core.server_manager import ServerManager
 from seq_llm.models.scanner import discover_models
+from seq_llm.safety.token_guard import ensure_within_ctx
 
 console = Console()
 app = typer.Typer(help="Sequence-LLM: CLI for managing local LLMs (llama-server)")
@@ -110,7 +111,7 @@ class CLIState:
         console.print(f"[cyan]Starting {profile.name}...")
         console.print(f"[dim]Loading model from {profile.endpoint}")
         try:
-            startup_timeout = 120 if not had_active_profile else 60
+            startup_timeout = 300 if not had_active_profile else 120
             self.manager.start_cmd(
                 cmd=cmd,
                 port=profile.port,
@@ -144,9 +145,7 @@ class CLIState:
         status_text += f"Port: {profile.port}\n"
         status_text += f"Health: {'✓ Ready' if is_healthy else '✗ Not ready'}"
 
-        console.print(
-            Panel(status_text, title="[bold]Server Status", border_style="green")
-        )
+        console.print(Panel(status_text, title="[bold]Server Status", border_style="green"))
 
 
 state = CLIState()
@@ -187,9 +186,7 @@ def run_first_time_setup() -> bool:
 
     assignments: dict[str, str] = {}
     for profile_name in ("brain", "coder"):
-        choice = console.input(
-            f"[blue]Select model # for '{profile_name}'[/blue]> "
-        ).strip()
+        choice = console.input(f"[blue]Select model # for '{profile_name}'[/blue]> ").strip()
         try:
             selected_index = int(choice) - 1
         except ValueError:
@@ -235,9 +232,7 @@ def main():
         console.print("[yellow]Warning: 'brain' profile not found in config")
 
     # Interactive loop
-    console.print(
-        "[cyan]Ready for input. Commands: /brain, /coder, /status, /clear, /quit, /exit"
-    )
+    console.print("[cyan]Ready for input. Commands: /brain, /coder, /status, /clear, /quit, /exit")
 
     while True:
         try:
@@ -282,9 +277,18 @@ def main():
                 continue
 
             assistant_response = ""
+            # ---- Token safety guard ----
+            trimmed_messages, fits = ensure_within_ctx(
+                state.conversation,
+                profile.ctx_size if hasattr(profile, "ctx_size") else 4096,
+            )
+
+            if not fits:
+                console.print("[yellow]Warning: conversation trimmed to fit context window")
+
             try:
                 with APIClient(base_url=f"http://127.0.0.1:{profile.port}") as client:
-                    for token in client.stream_chat(state.conversation, model=profile.name):
+                    for token in client.stream_chat(trimmed_messages, model=profile.name):
                         console.print(token, end="")
                         assistant_response += token
                     console.print("")
@@ -293,6 +297,7 @@ def main():
                 continue
 
             if assistant_response:
+                state.conversation = trimmed_messages
                 state.conversation.append({"role": "assistant", "content": assistant_response})
 
 
